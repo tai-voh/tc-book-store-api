@@ -12,7 +12,7 @@ This is a practice project for NodeJS with MongoDB.
 
 1. Clone the repository:
    ```shell
-   git clone https://github.com/tai-voh/tc-book-store-api
+   git clone https://github.com/TuanMc/tc-book-store-api.git
    ```
 2.  Change into the project directory:
     ```shell
@@ -28,9 +28,6 @@ This is a practice project for NodeJS with MongoDB.
 
 - Update the configuration values in `.env` according to your environment.
 
-- Use MongoDB with database book_store_db
-	use book_store_db
-
 ## Usage
 
 1. Start the development server:
@@ -42,28 +39,34 @@ This is a practice project for NodeJS with MongoDB.
 
 ## Routes
 
-### Authentication
--   POST /api/auth/login
--   POST /api/auth/logout
--   POST /api/auth/register
 
 ### Users
 -   GET /api/users: Retrieves a list of users.
--   GET /api/users/:id: Retrieves a specific user by ID.
+-   GET /api/users/:userId: Retrieves a specific user by ID.
 -   POST /api/users: Creates a new user.
--   PUT /api/users/:id: Updates a user by ID.
--   DELETE /api/users/:id: Deletes a user by ID.
+-   POST /api/users/login: Login user.
+-   PUT /api/users/:userId: Updates a user by ID.
+-   DELETE /api/users/:userId: Deletes a user by ID.
 
 ### Books
 -   GET /api/books: Retrieves a list of books.
--   GET /api/books/:id: Retrieves a specific book by ID.
+-   GET /api/books/:bookId: Retrieves a specific book by ID.
 -   POST /api/books: Creates a new book.
--   PUT /api/books/:id: Updates a book by ID.
--   DELETE /api/books/:id: Deletes a book by ID.
-
-### Book Category
--   GET /api/books/categories: Retrieves a list of books' categories.
+-   PUT /api/books/:bookId: Updates a book by ID.
+-   DELETE /api/books/:bookId: Deletes a book by ID.
 
 ### Cart
--   GET /api/carts/:userId: Retrieves unpaid books in cart.
--   TBD
+-   GET /api/carts: Retrieves carts of all users.
+-   GET /api/carts/user/:userId: Retrieves unpaid books in cart of an user.
+-   GET /api/carts/:cartId: Retrieves a specific cart by ID.
+-   POST /api/carts: Creates a new cart.
+-   PUT /api/carts/:cartId: Updates a cart by ID.
+-   DELETE /api/carts/:cartId: Deletes a cart by ID.
+
+### Order
+-   GET /api/orders: Retrieves orders of all users.
+-   GET /api/orders/user/:userId: Retrieves orders of an user.
+-   GET /api/orders/:orderId: Retrieves a specific order by ID.
+-   POST /api/orders: Creates a new order.
+-   PUT /api/orders/:orderId: Updates a order by ID.
+-   DELETE /api/orders/:orderid: Deletes a order by ID.

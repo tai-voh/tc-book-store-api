@@ -12,31 +12,37 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteByBookId = exports.updateByBookId = exports.create = exports.findOne = exports.findAll = void 0;
+exports.findByUser = exports.deleteByBookId = exports.update = exports.create = exports.findOne = exports.findAll = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const books_1 = __importDefault(require("../models/books"));
 const pagination_1 = __importDefault(require("../models/pagination"));
 const error_1 = __importDefault(require("../models/error"));
+const imageSource = '/images/';
 /**
  * Retrieve all Books from the database.
  * @param {*} req
  * @param {*} res
  */
 function findAll(req, res) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         const queries = req.query;
         // Apply filter and pagination here
-        var condition = {};
+        let condition = {};
+        const searchKey = ((_a = queries.search) === null || _a === void 0 ? void 0 : _a.toString()) || '';
+        if (searchKey) {
+            const term = `\"${searchKey}\"`;
+            condition = { $text: { $search: term } };
+        }
         const page = parseInt(queries.page) || 1; // Current page number
         const limit = parseInt(queries.limit) || 10; // Number of results per page
         try {
-            const count = yield books_1.default.countDocuments();
-            const totalPages = Math.ceil(count / limit);
-            const books = yield books_1.default.find(condition)
+            const count = yield books_1.default.countDocuments(condition);
+            let books = yield books_1.default.find(condition)
                 .skip((page - 1) * limit)
                 .limit(limit)
                 .exec();
-            res.json(new pagination_1.default(books, page, totalPages));
+            res.json(new pagination_1.default(books, page, count));
         }
         catch (error) {
             res.status(500)
@@ -45,6 +51,35 @@ function findAll(req, res) {
     });
 }
 exports.findAll = findAll;
+;
+/**
+ * Retrieve all Books of an user.
+ * @param {*} req
+ * @param {*} res
+ */
+function findByUser(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const userId = req.params.userId;
+        const queries = req.query;
+        // Apply filter and pagination here
+        const condition = {};
+        const page = parseInt(queries.page) || 1; // Current page number
+        const limit = parseInt(queries.limit) || 10; // Number of results per page
+        try {
+            const count = yield books_1.default.countDocuments({ userId });
+            let books = yield books_1.default.find(condition)
+                .skip((page - 1) * limit)
+                .limit(limit)
+                .exec();
+            res.json(new pagination_1.default(books, page, count));
+        }
+        catch (error) {
+            res.status(500)
+                .json(new error_1.default(error ? error['message'] : "Some error occurred while retrieving books."));
+        }
+    });
+}
+exports.findByUser = findByUser;
 ;
 /**
  * Retrieve a book with book id
@@ -118,27 +153,35 @@ exports.create = create;
  * @param {*} req
  * @param {*} res
  */
-function updateByBookId(req, res) {
+function update(req, res) {
+    var _a;
     if (!req.body) {
         return res.status(400)
             .send(new error_1.default("Data to update can not be empty!"));
     }
-    const id = req.params.bookId;
-    books_1.default.findByIdAndUpdate(id, req.body, { useFindAndModify: false })
-        .then(data => {
-        if (!data) {
-            res.status(404)
-                .send(new error_1.default("Could not update Book with id " + id));
+    try {
+        const id = req.params.bookId;
+        const filename = (_a = req.file) === null || _a === void 0 ? void 0 : _a.filename;
+        if (filename) {
+            req.body.image = filename;
         }
-        else
-            res.send({ message: "Book was updated successfully." });
-    })
-        .catch(err => {
+        books_1.default.findByIdAndUpdate(id, req.body, { useFindAndModify: false })
+            .then(data => {
+            if (!data) {
+                res.status(404)
+                    .send(new error_1.default("Could not update Book with id " + id));
+            }
+            else
+                res.send({ message: "Book was updated successfully." });
+        });
+    }
+    catch (error) {
         res.status(500)
-            .send(new error_1.default("Error updating Book with id " + id));
-    });
+            .json(new error_1.default(error ? error['message'] : "Some error occurred while updating book."));
+        return;
+    }
 }
-exports.updateByBookId = updateByBookId;
+exports.update = update;
 ;
 /**
  * Delete a book by bookId

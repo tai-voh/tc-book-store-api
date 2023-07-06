@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteByUserId = exports.updateByUserId = exports.create = exports.login = exports.findOne = exports.findAll = void 0;
+exports.deleteByUserId = exports.update = exports.create = exports.login = exports.findOne = exports.findAll = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const users_1 = __importDefault(require("../models/users"));
 const pagination_1 = __importDefault(require("../models/pagination"));
@@ -28,7 +28,7 @@ function findAll(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         const queries = req.query;
         // Apply filter and pagination here
-        var condition = {};
+        const condition = {};
         const page = parseInt(queries.page) || 1; // Current page number
         const limit = parseInt(queries.limit) || 10; // Number of results per page
         try {
@@ -38,7 +38,7 @@ function findAll(req, res) {
                 .skip((page - 1) * limit)
                 .limit(limit)
                 .exec();
-            res.json(new pagination_1.default(users, page, totalPages));
+            res.json(new pagination_1.default(users, page, count));
         }
         catch (error) {
             res
@@ -79,7 +79,7 @@ exports.findOne = findOne;
 function login(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         const email = req.body.email;
-        var password = req.body.password;
+        const password = req.body.password;
         try {
             const user = yield users_1.default.findOne({ email });
             if (user && (yield bcryptjs_1.default.compare(password, user.password))) {
@@ -162,7 +162,7 @@ exports.create = create;
  * @param {*} req
  * @param {*} res
  */
-function updateByUserId(req, res) {
+function update(req, res) {
     if (!req.body) {
         return res.status(400).send(new error_1.default("Data to update can not be empty!"));
     }
@@ -179,7 +179,7 @@ function updateByUserId(req, res) {
         res.status(500).send(new error_1.default("Error updating User with id " + id));
     });
 }
-exports.updateByUserId = updateByUserId;
+exports.update = update;
 /**
  * Delete a user by userId
  * @param {*} req

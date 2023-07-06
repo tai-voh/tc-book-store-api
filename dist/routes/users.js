@@ -27,13 +27,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-var router = express_1.default.Router();
+const router = express_1.default.Router();
 const userControllers = __importStar(require("../controllers/users"));
-/* GET users listing. */
+const auth_1 = __importDefault(require("../middleware/auth"));
 router.get('/', userControllers.findAll);
 router.get('/:userId', userControllers.findOne);
 router.post('/login', userControllers.login);
-router.post('/', userControllers.create);
-router.put('/:userId', userControllers.updateByUserId);
-router.delete('/:userId', userControllers.deleteByUserId);
+router.post('/', auth_1.default, userControllers.create);
+router.put('/:userId', auth_1.default, userControllers.update);
+router.delete('/:userId', auth_1.default, userControllers.deleteByUserId);
 module.exports = router;

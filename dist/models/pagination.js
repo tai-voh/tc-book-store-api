@@ -1,10 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 class Pagination {
-    constructor(data, page, totalPage) {
+    constructor(data, page, total) {
         this.data = data;
         this.page = page;
-        this.totalPage = totalPage;
+        this.total = total;
     }
 }
 exports.default = Pagination;

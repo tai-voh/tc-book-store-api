@@ -24,11 +24,12 @@ const CustomerInfoSchema = new Schema({
     lastName: { type: String },
     email: { type: String },
     tel: { type: String },
-    adddress: { type: String }
+    address: { type: String }
 });
 const OrderSchema = new Schema({
     userId: { type: db_1.mongoose.Schema.Types.ObjectId, ref: "UserModel" },
     customerInfo: CustomerInfoSchema,
+    createdDate: { type: Date },
     status: { type: String },
     items: [ItemSchema]
 });

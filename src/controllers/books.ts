@@ -2,6 +2,7 @@ import mongoose from"mongoose";
 import BookModel from "../models/books";
 import Pagination from "../models/pagination";
 import Error from "../models/error";
+import escapeStringRegexp from 'escape-string-regexp';
 
 const imageSource = '/images/';
 
@@ -16,9 +17,13 @@ async function findAll(req, res) {
     let condition = {};
     const searchKey = queries.search?.toString() || '';
     if (searchKey) {
-        
-        const term = `\"${searchKey}\"`;
-        condition = { $text: { $search: term}};
+        const $regex = escapeStringRegexp(searchKey);
+        condition = {
+            "$or": [
+                { title: { '$regex': $regex, '$options': 'i' } },
+                { description: { '$regex': $regex, '$options': 'i' } }
+            ]
+        };
     }
     const page = parseInt(queries.page) || 1; // Current page number
     const limit = parseInt(queries.limit) || 10; // Number of results per page

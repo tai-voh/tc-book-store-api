@@ -29,7 +29,7 @@ function findAll(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         const queries = req.query;
         // Apply filter and pagination here
-        var condition = {};
+        const condition = {};
         const page = parseInt(queries.page) || 1; // Current page number
         const limit = parseInt(queries.limit) || 10; // Number of results per page
         try {
@@ -39,7 +39,7 @@ function findAll(req, res) {
                 .skip((page - 1) * limit)
                 .limit(limit)
                 .exec();
-            res.json(new pagination_1.default(orders, page, totalPages));
+            res.json(new pagination_1.default(orders, page, count));
         }
         catch (error) {
             res
@@ -129,13 +129,13 @@ function findByUser(req, res) {
         const page = parseInt(queries.page) || 1; // Current page number
         const limit = parseInt(queries.limit) || 10; // Number of results per page
         try {
-            const count = yield orders_1.default.countDocuments();
+            const count = yield orders_1.default.countDocuments({ userId });
             const totalPages = Math.ceil(count / limit);
             const orders = yield orders_1.default.find({ userId })
                 .skip((page - 1) * limit)
                 .limit(limit)
                 .exec();
-            res.json(new pagination_1.default(orders, page, totalPages));
+            res.json(new pagination_1.default(orders, page, count));
         }
         catch (error) {
             res
@@ -171,12 +171,13 @@ function create(req, res) {
                 return;
             }
         }
+        let cart = {};
         if (!cartId) {
             res.status(400).send(new error_1.default("No cart for order"));
             return;
         }
         else {
-            var cart = yield carts_1.default.findById(cartId);
+            cart = yield carts_1.default.findById(cartId);
             if (!cart) {
                 res.status(400).send(new error_1.default("Cart is not exist"));
                 return;
@@ -194,75 +195,49 @@ function create(req, res) {
         try {
             let orderItems = [];
             let updateItems = [];
-            var promise = new Promise((resolve, reject) => {
-                let count = 0;
-                cartItems.forEach((i) => __awaiter(this, void 0, void 0, function* () {
-                    const productDetails = yield books_1.default.findById(i.productId);
-                    if (productDetails && i.quantity <= productDetails.quantity) {
-                        orderItems.push({
-                            productId: i.productId,
-                            quantity: i.quantity,
-                            price: i.price,
-                            title: i.title
-                        });
-                        const remainQuantity = productDetails.quantity - i.quantity;
-                        updateItems.push({
-                            productId: i.productId,
-                            quantity: remainQuantity
-                        });
-                    }
-                    else {
-                        res.status(400).send(new error_1.default("Item is invalid"));
-                        return;
-                    }
-                    if (++count == cartItems.length) {
-                        resolve(orderItems);
-                    }
-                    count++;
-                }));
-            });
-            promise
-                .then((items) => {
-                var order = new orders_1.default({
-                    _id: new mongoose_1.default.Types.ObjectId(),
-                    userId: userId,
-                    customerInfo: {
-                        firstName: customerInfo.firstName,
-                        lastName: customerInfo.lastName,
-                        email: customerInfo.email,
-                        tel: customerInfo.tel,
-                        adddress: customerInfo.adddress
-                    },
-                    status: 'received',
-                    items: orderItems
-                });
-                order
-                    .save(order)
-                    .then((data) => {
-                    var childPromise = new Promise((resolve, reject) => {
-                        let count = 0;
-                        updateItems.forEach((i) => {
-                            books_1.default.findByIdAndUpdate(i.productId, { quantity: i.quantity }, { useFindAndModify: false })
-                                .then((result) => {
-                                if (++count == updateItems.length) {
-                                    resolve('resolved');
-                                }
-                            });
-                        });
+            for (let i of cartItems) {
+                const productDetails = yield books_1.default.findById(i.productId);
+                if (productDetails && i.quantity <= productDetails.quantity) {
+                    orderItems.push({
+                        productId: i.productId,
+                        quantity: i.quantity,
+                        price: i.price,
+                        title: i.title
                     });
-                    childPromise
-                        .then((message) => {
-                        carts_1.default.findByIdAndRemove(cartId).then((data) => {
-                            res.status(200).send(data);
-                        });
+                    const remainQuantity = productDetails.quantity - i.quantity;
+                    updateItems.push({
+                        productId: i.productId,
+                        quantity: remainQuantity
                     });
-                });
-            })
-                .catch((err) => {
-                res
-                    .status(500)
-                    .send(new error_1.default(err.message || "Some error occurred while creating order."));
+                }
+                else {
+                    res.status(400).send(new error_1.default("Item is invalid"));
+                    return;
+                }
+            }
+            const order = new orders_1.default({
+                _id: new mongoose_1.default.Types.ObjectId(),
+                userId: userId,
+                customerInfo: {
+                    firstName: customerInfo.firstName,
+                    lastName: customerInfo.lastName,
+                    email: customerInfo.email,
+                    tel: customerInfo.tel,
+                    address: customerInfo.address
+                },
+                createdDate: Date.now(),
+                status: 'received',
+                items: orderItems
             });
+            order
+                .save(order)
+                .then((data) => __awaiter(this, void 0, void 0, function* () {
+                for (let i of updateItems) {
+                    yield books_1.default.findByIdAndUpdate(i.productId, { quantity: i.quantity }, { useFindAndModify: false });
+                }
+                yield carts_1.default.findByIdAndRemove(cartId);
+                res.status(200).send(data);
+            }));
         }
         catch (error) {
             res

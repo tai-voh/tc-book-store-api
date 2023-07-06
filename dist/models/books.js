@@ -13,7 +13,6 @@ var __rest = (this && this.__rest) || function (s, e) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const db_1 = require("../config/db");
 const Schema = db_1.mongoose.Schema;
-const imagePath = '/src/public/images/';
 const BookSchema = new Schema({
     title: { type: String },
     image: { type: String },
@@ -23,10 +22,10 @@ const BookSchema = new Schema({
     categoryId: { type: String },
     userId: { type: String }
 });
+BookSchema.index({ title: 'text', description: 'text' });
 BookSchema.method("toJSON", function () {
     const _a = this.toObject(), { __v, _id } = _a, object = __rest(_a, ["__v", "_id"]);
     object.id = _id;
-    object.image = imagePath + object.image;
     return object;
 });
 const BookModel = db_1.mongoose.model('books', BookSchema);

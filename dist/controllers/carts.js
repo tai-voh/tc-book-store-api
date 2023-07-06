@@ -28,7 +28,7 @@ function findAll(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         const queries = req.query;
         // Apply filter and pagination here
-        var condition = {};
+        let condition = {};
         const page = parseInt(queries.page) || 1; // Current page number
         const limit = parseInt(queries.limit) || 10; // Number of results per page
         try {
@@ -59,71 +59,20 @@ function checkItems(data) {
     return __awaiter(this, void 0, void 0, function* () {
         const items = data === null || data === void 0 ? void 0 : data.items;
         if (items) {
-            // let newItems:any = [];
             for (let item of items) {
                 let itemData = yield books_1.default.findById(item.productId);
-                if (!itemData)
-                    continue;
-                // if (!itemData) {
-                //   itemData = {
-                //     title: item.title,
-                //     price: item.price,
-                //     quantity: 0
-                //   }
-                // }
+                if (!itemData) {
+                    itemData = {
+                        title: item.title,
+                        price: item.price,
+                        quantity: 0
+                    };
+                }
                 item.title = itemData.title;
                 item.price = itemData.price;
                 item.stockQuantity = itemData.quantity;
-                // newItems.push(item);
             }
-            // data.items = newItems;
         }
-        //   var promise = new Promise((resolve, reject) => {
-        //     let newItems:any = [];
-        //     let count = 0;
-        //     sss
-        //     items.forEach(item => {
-        //       BookModel.findById(item.productId)
-        //         .then(data => {
-        //             if (!data) {
-        //               data = {
-        //                 title: item.title,
-        //                 price: item.price,
-        //                 quantity: 0
-        //               }
-        //             }
-        //             item.title = data.title;
-        //             item.price = data.price;
-        //             item.stockQuantity = data.quantity;
-        //             newItems.push(item);
-        //             if (++count == items.length) {
-        //               resolve(newItems);
-        //             }
-        //         })
-        //         .catch(err => {
-        //             res.status(500)
-        //                 .send(new Error(err.message || "Some error occurred while retrieving cart."));
-        //         });
-        //     })
-        //   });
-        //   return promise
-        //     .then((newItems) => {
-        //       data.items = newItems;
-        //       res.send(data);
-        //     });
-        // } catch (error) {
-        //   res
-        //     .status(500)
-        //     .json(
-        //       new Error(
-        //         error
-        //           ? error["message"]
-        //           : "Some error occurred while retrieving cart."
-        //       )
-        //     );
-        // } 
-        // }
-        // console.log(data);
         return data;
     });
 }
@@ -140,9 +89,7 @@ function findOne(req, res) {
             if (!data)
                 res.status(404).send(new error_1.default("Not found"));
             else {
-                console.log(data);
                 const data1 = yield checkItems(data);
-                console.log(data1);
                 res.send(data1);
             }
         }))
@@ -167,7 +114,8 @@ function findOneByUser(req, res) {
             if (!data)
                 res.status(404).send(new error_1.default("Not found"));
             else {
-                checkItems(data);
+                const data1 = yield checkItems(data);
+                res.send(data1);
             }
         }))
             .catch((err) => {
@@ -223,14 +171,15 @@ function updateCart(req, res) {
             return;
         }
         try {
+            let cart = {};
             if (oldCart) {
-                var cart = oldCart;
+                cart = oldCart;
                 for (let item of items) {
                     cart = yield updateItemToCart(oldCart, item, update, res);
                 }
             }
             else {
-                var cart = new carts_1.default({
+                cart = new carts_1.default({
                     _id: new mongoose_1.default.Types.ObjectId(),
                     userId: userId,
                     items: []
@@ -245,7 +194,6 @@ function updateCart(req, res) {
                 res.status(200).send(data);
             })
                 .catch((err) => {
-                console.log(err.message);
                 res
                     .status(500)
                     .send(new error_1.default(err.message || "Some error occurred while saving cart."));

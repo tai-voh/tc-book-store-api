@@ -7,7 +7,7 @@ const multer_1 = __importDefault(require("multer"));
 // Setting storage engine for uploading images
 const storageEngine = multer_1.default.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, "src/public/images/");
+        cb(null, "public/images/");
     },
     filename: (req, file, cb) => {
         cb(null, `${Date.now()}--${file.originalname}`);

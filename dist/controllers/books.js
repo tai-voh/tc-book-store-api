@@ -8,16 +8,144 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.findByUser = exports.deleteByBookId = exports.update = exports.create = exports.findOne = exports.findAll = void 0;
+exports.request = exports.findByUser = exports.deleteByBookId = exports.update = exports.create = exports.findOne = exports.findAll = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const books_1 = __importDefault(require("../models/books"));
 const pagination_1 = __importDefault(require("../models/pagination"));
 const error_1 = __importDefault(require("../models/error"));
-const imageSource = '/images/';
+const kafka_1 = require("../config/kafka");
+/**
+ * Execute requests via Kafka
+ */
+const topic = 'book-requests';
+function executeRequest() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            yield kafka_1.consumer.connect();
+            yield kafka_1.consumer.subscribe({ topics: [topic] });
+            yield kafka_1.consumer.run({
+                eachMessage: ({ message }) => __awaiter(this, void 0, void 0, function* () {
+                    var _a;
+                    const data = JSON.parse((_a = message.value) === null || _a === void 0 ? void 0 : _a.toString());
+                    const action = data === null || data === void 0 ? void 0 : data.action;
+                    const id = data === null || data === void 0 ? void 0 : data.id;
+                    const content = data === null || data === void 0 ? void 0 : data.content;
+                    console.log('receive message');
+                    switch (action) {
+                        case 'create':
+                            createViaKafka(content);
+                            break;
+                        case 'update':
+                            updateViaKafka(id, content);
+                            break;
+                        case 'deleteByBookId':
+                            deleteByBookIdViaKafka(id);
+                            break;
+                        default:
+                            console.log('Error when execute book request');
+                    }
+                }),
+            });
+        }
+        catch (error) {
+            console.log(error ? error['message'] : "Execute request failed");
+        }
+    });
+}
+executeRequest();
+/**
+ * Receive requests and store in Kafka
+ */
+function request(req, res) {
+    var _a, _b;
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const _c = req.body, { action, id } = _c, content = __rest(_c, ["action", "id"]);
+            let message = {};
+            let filename = '';
+            switch (action) {
+                case 'create':
+                    const { title, quantity, price, description, file, categoryId, userId } = content;
+                    if (!title || !quantity || !price || !file || !categoryId || !userId) {
+                        res.status(400)
+                            .send(new error_1.default("Invalid data"));
+                        return;
+                    }
+                    else {
+                        const filename = ((_a = req.file) === null || _a === void 0 ? void 0 : _a.filename) || '';
+                        content.image = filename;
+                    }
+                    break;
+                case 'update':
+                    if (!id) {
+                        res.status(400)
+                            .send(new error_1.default("Invalid book id"));
+                        return;
+                    }
+                    if (!Object.keys(content).length) {
+                        res.status(400)
+                            .send(new error_1.default("Invalid data"));
+                        return;
+                    }
+                    else {
+                        const filename = ((_b = req.file) === null || _b === void 0 ? void 0 : _b.filename) || '';
+                        if (filename) {
+                            content.image = filename;
+                        }
+                    }
+                    break;
+                case 'deleteByBookId':
+                    if (!id) {
+                        res.status(400)
+                            .send(new error_1.default("Invalid book id"));
+                        return;
+                    }
+                    break;
+                default:
+                    res.status(400)
+                        .send(new error_1.default("Invalid action"));
+                    return;
+            }
+            message = {
+                action: action,
+                id: id,
+                content: content
+            };
+            yield kafka_1.producer.connect();
+            yield kafka_1.producer.send({
+                topic: topic,
+                messages: [
+                    {
+                        key: 'key',
+                        value: JSON.stringify(message)
+                    }
+                ]
+            });
+            yield kafka_1.producer.disconnect();
+            res.send({ message: "Send request successfully" });
+        }
+        catch (error) {
+            res.status(400)
+                .json(new error_1.default(error ? error['message'] : "Send request failed"));
+        }
+    });
+}
+exports.request = request;
 /**
  * Retrieve all Books from the database.
  * @param {*} req
@@ -31,8 +159,13 @@ function findAll(req, res) {
         let condition = {};
         const searchKey = ((_a = queries.search) === null || _a === void 0 ? void 0 : _a.toString()) || '';
         if (searchKey) {
-            const term = `\"${searchKey}\"`;
-            condition = { $text: { $search: term } };
+            const $regex = searchKey.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+            condition = {
+                "$or": [
+                    { title: { '$regex': $regex, '$options': 'i' } },
+                    { description: { '$regex': $regex, '$options': 'i' } }
+                ]
+            };
         }
         const page = parseInt(queries.page) || 1; // Current page number
         const limit = parseInt(queries.limit) || 10; // Number of results per page
@@ -205,4 +338,67 @@ function deleteByBookId(req, res) {
     });
 }
 exports.deleteByBookId = deleteByBookId;
+;
+/**
+ * Create a book
+ * @param {*} params
+ */
+function createViaKafka(params) {
+    try {
+        const book = new books_1.default({
+            _id: new mongoose_1.default.Types.ObjectId(),
+            title: params.title,
+            quantity: params.quantity,
+            price: params.price,
+            description: params.description,
+            categoryId: params.categoryId,
+            image: params.filename,
+            userId: params.userId
+        });
+        // Save Book in the database
+        book
+            .save(book)
+            .then(data => {
+            return true;
+        });
+    }
+    catch (error) {
+        console.log(error ? error['message'] : "Some error occurred while creating the Book.");
+        return false;
+    }
+}
+;
+/**
+ * Update a book by bookId
+ * @param {*} id
+ * @param {*} params
+ */
+function updateViaKafka(id, params) {
+    try {
+        books_1.default.findByIdAndUpdate(id, params, { useFindAndModify: false })
+            .then(data => {
+            if (data)
+                return true;
+        });
+    }
+    catch (error) {
+        console.log(error ? error['message'] : "Some error occurred while updating book.");
+        return false;
+    }
+}
+;
+/**
+ * Delete a book by bookId
+ * @param {*} id
+ */
+function deleteByBookIdViaKafka(id) {
+    books_1.default.findByIdAndRemove(id, { useFindAndModify: false })
+        .then(data => {
+        return true;
+    })
+        .catch(error => {
+        console.log(error ? error['message'] : "Could not delete Book with id " + id);
+        return false;
+    });
+}
 ;

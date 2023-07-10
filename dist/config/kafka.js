@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.consumer = exports.producer = void 0;
+const kafkajs_1 = require("kafkajs");
+const clientId = 'tc-books-store';
+const brokers = process.env.KAFKA_BROKER ? [process.env.KAFKA_BROKER] : ['127.0.0.1:9092'];
+const kafka = new kafkajs_1.Kafka({ clientId, brokers });
+const producer = kafka.producer();
+exports.producer = producer;
+const consumer = kafka.consumer({ groupId: clientId });
+exports.consumer = consumer;

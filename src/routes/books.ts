@@ -10,5 +10,6 @@ router.get('/:bookId', bookControllers.findOne);
 router.post('/', verifyToken, upload.single('file'), bookControllers.create);
 router.put('/:bookId', verifyToken, upload.single('file'), bookControllers.update);
 router.delete('/:bookId', verifyToken, bookControllers.deleteByBookId);
+router.post('/request', verifyToken, upload.single('file'), bookControllers.request);
 
 module.exports = router;

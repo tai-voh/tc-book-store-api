@@ -61,7 +61,8 @@ app.use(function (err, req, res, next) {
     res.send('Internal Server Error');
 });
 // image resource
-app.use('/images', express_1.default.static(__dirname + '/public/images'));
+const imagePath = path_1.default.join(__dirname, '..', 'public/images');
+app.use('/images', express_1.default.static(imagePath));
 // Gracefully disconnect from the database when the application is terminated
 process.on('SIGINT', () => __awaiter(void 0, void 0, void 0, function* () {
     yield (0, db_1.disconnectFromDatabase)();

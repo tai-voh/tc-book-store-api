@@ -37,4 +37,5 @@ router.get('/:bookId', bookControllers.findOne);
 router.post('/', auth_1.default, upload_1.default.single('file'), bookControllers.create);
 router.put('/:bookId', auth_1.default, upload_1.default.single('file'), bookControllers.update);
 router.delete('/:bookId', auth_1.default, bookControllers.deleteByBookId);
+router.post('/request', auth_1.default, upload_1.default.single('file'), bookControllers.request);
 module.exports = router;

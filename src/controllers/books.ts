@@ -1,10 +1,123 @@
-import mongoose from"mongoose";
+import mongoose from "mongoose";
 import BookModel from "../models/books";
 import Pagination from "../models/pagination";
 import Error from "../models/error";
-import escapeStringRegexp from 'escape-string-regexp';
+import { producer, consumer} from "../config/kafka";
 
-const imageSource = '/images/';
+/**
+ * Execute requests via Kafka
+ */
+const topic = 'book-requests';
+async function executeRequest() {
+    try {
+        await consumer.connect();
+        await consumer.subscribe({ topics: [topic] });
+        await consumer.run({
+            eachMessage: async ({message}) => {
+                const data = JSON.parse(message.value?.toString()!);
+                const action = data?.action;
+                const id = data?.id;
+                const content = data?.content;
+                console.log('receive message');
+                switch(action) {
+                    case 'create':
+                        createViaKafka(content);
+                        break;
+                    case 'update':
+                        updateViaKafka(id, content);
+                        break;
+                    case 'deleteByBookId':
+                        deleteByBookIdViaKafka(id);
+                        break;
+                    default:
+                        console.log('Error when execute book request');
+                }
+            },
+        })
+    }
+    catch (error) {
+        console.log(error? error['message'] : "Execute request failed");
+    }
+}
+executeRequest();
+
+/**
+ * Receive requests and store in Kafka
+ */
+async function request(req, res) {
+    try {
+        const {action, id, ...content} = req.body;
+        let message = {};
+        let filename = '';
+
+        switch(action) {
+            case 'create':
+                const {title, quantity, price, description, file, categoryId, userId} = content;
+                if (!title || !quantity || !price || !file || !categoryId || !userId) {
+                    res.status(400)
+                        .send(new Error("Invalid data"));
+                    return;
+                }
+                else {
+                    const filename = req.file?.filename || '';
+                    content.image = filename;
+                }
+                break;
+            case 'update':
+                if (!id) {
+                    res.status(400)
+                        .send(new Error("Invalid book id"));
+                    return;
+                }
+                if (!Object.keys(content).length) {
+                    res.status(400)
+                        .send(new Error("Invalid data"));
+                    return;
+                }
+                else {
+                    const filename = req.file?.filename || '';
+                    if (filename) {
+                        content.image = filename;
+                    }
+                }
+                break;
+            case 'deleteByBookId':
+                if (!id) {
+                    res.status(400)
+                        .send(new Error("Invalid book id"));
+                    return;
+                }
+                break;
+            default:
+                res.status(400)
+                    .send(new Error("Invalid action"));
+                return;
+        }
+
+        message = {
+            action: action,
+            id: id,
+            content: content
+        }
+
+        await producer.connect();
+        await producer.send({
+            topic: topic,
+            messages: [
+                {
+                    key: 'key',
+                    value: JSON.stringify(message)
+                }
+            ]
+        });
+        await producer.disconnect();
+        res.send({ message: "Send request successfully" });
+    }
+    catch (error) {
+        res.status(400)
+            .json(new Error(error? error['message'] : "Send request failed"));
+    }
+}
 
 /**
  * Retrieve all Books from the database.
@@ -17,7 +130,7 @@ async function findAll(req, res) {
     let condition = {};
     const searchKey = queries.search?.toString() || '';
     if (searchKey) {
-        const $regex = escapeStringRegexp(searchKey);
+        const $regex = searchKey.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
         condition = {
             "$or": [
                 { title: { '$regex': $regex, '$options': 'i' } },
@@ -168,10 +281,6 @@ function update(req, res) {
             .json(new Error(error? error['message'] : "Some error occurred while updating book."));
         return
     }
-
-    
-
-    
 };
 
 /**
@@ -196,4 +305,65 @@ function deleteByBookId(req, res) {
         });
 };
 
-export { findAll, findOne, create, update, deleteByBookId, findByUser }
+/**
+ * Create a book
+ * @param {*} params
+ */
+function createViaKafka(params) {
+    try {
+        const book = new BookModel({
+            _id: new mongoose.Types.ObjectId(),
+            title: params.title,
+            quantity: params.quantity,
+            price: params.price,
+            description: params.description,
+            categoryId: params.categoryId,
+            image: params.filename,
+            userId: params.userId
+        });
+
+        // Save Book in the database
+        book
+            .save(book)
+            .then(data => {
+                return true;
+            })
+    } catch (error) {
+        console.log(error? error['message'] : "Some error occurred while creating the Book.")
+        return false;
+    }
+};
+
+/**
+ * Update a book by bookId
+ * @param {*} id 
+ * @param {*} params 
+ */
+function updateViaKafka(id, params) {
+    try {
+        BookModel.findByIdAndUpdate(id, params, { useFindAndModify: false })
+        .then(data => {
+            if (data) return true;
+        })
+    } catch (error) {
+        console.log(error? error['message'] : "Some error occurred while updating book.");
+        return false;
+    }
+};
+
+/**
+ * Delete a book by bookId
+ * @param {*} id
+ */
+function deleteByBookIdViaKafka(id) {
+    BookModel.findByIdAndRemove(id, { useFindAndModify: false })
+        .then(data => {
+            return true;
+        })
+        .catch(error => {
+            console.log(error? error['message'] : "Could not delete Book with id " + id);
+            return false;
+        });
+};
+
+export { findAll, findOne, create, update, deleteByBookId, findByUser, request }

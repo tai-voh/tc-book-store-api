@@ -11,22 +11,15 @@ This is a practice project for NodeJS with MongoDB.
 ## Installation
 
 1. Clone the repository:
-   ```shell
    git clone https://github.com/TuanMc/tc-book-store-api.git
    ```
 2.  Change into the project directory:
-    ```shell
     cd tc-book-store-api
     ```
-3.  Install the dependencies:
-    ```shell
-    npm i
+3.  Build and run the services:
+    docker compose build
+    docker compose up -d
     ```
-4.  Set up the configuration (if applicable):
-
-- Copy the `.env.example` file and rename it to `.env`.
-
-- Update the configuration values in `.env` according to your environment.
 
 ## Usage
 

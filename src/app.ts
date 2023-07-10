@@ -58,7 +58,8 @@ app.use(function (err, req, res, next) {
 });
 
 // image resource
-app.use('/images', express.static(__dirname + '/public/images'));
+const imagePath = path.join(__dirname, '..', 'public/images');
+app.use('/images', express.static(imagePath));
 
 // Gracefully disconnect from the database when the application is terminated
 process.on('SIGINT', async () => {

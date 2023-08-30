@@ -2,7 +2,10 @@ import mongoose from "mongoose";
 import BookModel from "../models/books";
 import Pagination from "../models/pagination";
 import Error from "../models/error";
-import { producer, consumer} from "../config/kafka";
+import { producer, bookConsumer} from "../config/kafka";
+import { minioClient, bookBucketName, saveContent } from "../config/minio";
+import { registry, registerBookSchema } from "../config/schema";
+// import { runBookRequestJob } from "../jobs/book-requests-job";
 
 /**
  * Execute requests via Kafka
@@ -10,24 +13,33 @@ import { producer, consumer} from "../config/kafka";
 const topic = 'book-requests';
 async function executeRequest() {
     try {
-        await consumer.connect();
-        await consumer.subscribe({ topics: [topic] });
-        await consumer.run({
+        await bookConsumer.connect();
+        await bookConsumer.subscribe({ topics: [topic] });
+        await bookConsumer.run({
             eachMessage: async ({message}) => {
                 const data = JSON.parse(message.value?.toString()!);
                 const action = data?.action;
-                const id = data?.id;
+                let id = data?.id;
                 const content = data?.content;
-                console.log('receive message');
+                let result;
                 switch(action) {
                     case 'create':
-                        createViaKafka(content);
+                        result = await createViaKafka(content);
+                        if (result?.id) {
+                            saveToMinio(action, id, result);
+                        }
                         break;
                     case 'update':
-                        updateViaKafka(id, content);
+                        result = await updateViaKafka(id, content);
+                        if (result?.id) {
+                            saveToMinio(action, id, result);
+                        }
                         break;
                     case 'deleteByBookId':
-                        deleteByBookIdViaKafka(id);
+                        result = await deleteByBookIdViaKafka(id);
+                        if (result?.id) {
+                            saveToMinio('delete', id, result);
+                        }
                         break;
                     default:
                         console.log('Error when execute book request');
@@ -40,6 +52,20 @@ async function executeRequest() {
     }
 }
 executeRequest();
+// runBookRequestJob();
+
+/**
+ * Save requests to Minio
+ */
+async function saveToMinio(action, id, data) {
+    try {
+        data.action = action;
+        if (id) data.id = id;
+        await saveContent('books', data);
+    } catch (error) {
+        console.log(error? error['message'] : "Some error occurred while saving book request message to Minio.")
+    }
+}
 
 /**
  * Receive requests and store in Kafka
@@ -309,7 +335,7 @@ function deleteByBookId(req, res) {
  * Create a book
  * @param {*} params
  */
-function createViaKafka(params) {
+async function createViaKafka(params) {
     try {
         const book = new BookModel({
             _id: new mongoose.Types.ObjectId(),
@@ -318,16 +344,13 @@ function createViaKafka(params) {
             price: params.price,
             description: params.description,
             categoryId: params.categoryId,
-            image: params.filename,
+            image: params.image,
             userId: params.userId
         });
 
-        // Save Book in the database
-        book
-            .save(book)
-            .then(data => {
-                return true;
-            })
+        return await book.save(book).then((data) => {
+            return data;
+        });
     } catch (error) {
         console.log(error? error['message'] : "Some error occurred while creating the Book.")
         return false;
@@ -339,12 +362,12 @@ function createViaKafka(params) {
  * @param {*} id 
  * @param {*} params 
  */
-function updateViaKafka(id, params) {
+async function updateViaKafka(id, params) {
     try {
-        BookModel.findByIdAndUpdate(id, params, { useFindAndModify: false })
-        .then(data => {
-            if (data) return true;
-        })
+        
+        return await BookModel.findByIdAndUpdate(id, params, { useFindAndModify: false }).then((data) => {
+            return data;
+        });
     } catch (error) {
         console.log(error? error['message'] : "Some error occurred while updating book.");
         return false;
@@ -355,15 +378,15 @@ function updateViaKafka(id, params) {
  * Delete a book by bookId
  * @param {*} id
  */
-function deleteByBookIdViaKafka(id) {
-    BookModel.findByIdAndRemove(id, { useFindAndModify: false })
-        .then(data => {
-            return true;
-        })
-        .catch(error => {
-            console.log(error? error['message'] : "Could not delete Book with id " + id);
-            return false;
+async function deleteByBookIdViaKafka(id) {
+    try {
+        return await BookModel.findByIdAndRemove(id, { useFindAndModify: false }).then((data) => {
+            return data;
         });
+    } catch (error) {
+        console.log(error? error['message'] : "Some error occurred while deleting book.");
+        return false;
+    }
 };
 
 export { findAll, findOne, create, update, deleteByBookId, findByUser, request }

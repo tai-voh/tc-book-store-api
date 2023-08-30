@@ -3,7 +3,7 @@ import { mongoose } from '../config/db';
 const Schema = mongoose.Schema;
 
 const ItemSchema = new Schema({
-    productId: { type: mongoose.Schema.Types.ObjectId, ref: "BookModel" },
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: "books" },
     quantity: {type: Number},
     price: {type: Number},
     stockQuantity: {type: Number},
@@ -11,7 +11,7 @@ const ItemSchema = new Schema({
 });
 
 const CartSchema = new Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "UserModel"},
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "users"},
     items: [ ItemSchema ]
 });
 

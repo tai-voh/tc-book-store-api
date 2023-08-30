@@ -5,6 +5,7 @@ import path from 'path';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
 import { connectToDatabase, disconnectFromDatabase } from './config/db';
+import { createTables } from "./config/Postgres";
 import cors from 'cors';
 
 
@@ -32,6 +33,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// image resource
+const imagePath = path.join(__dirname, '../public/images');
+app.use('/images', express.static(imagePath));
+
 // API Routes
 const bookRouter = require('./routes/books');
 app.use('/api/books', bookRouter);
@@ -41,6 +46,8 @@ const cartsRouter = require('./routes/carts');
 app.use('/api/carts', cartsRouter);
 const ordersRouter = require('./routes/orders');
 app.use('/api/orders', ordersRouter);
+const customersRouter = require('./routes/customers');
+app.use('/api/customers', customersRouter);
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
@@ -57,9 +64,7 @@ app.use(function (err, req, res, next) {
   res.send('Internal Server Error');
 });
 
-// image resource
-const imagePath = path.join(__dirname, '..', 'public/images');
-app.use('/images', express.static(imagePath));
+createTables();
 
 // Gracefully disconnect from the database when the application is terminated
 process.on('SIGINT', async () => {

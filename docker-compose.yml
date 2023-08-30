@@ -1,18 +1,19 @@
-version: "3"
+version: "3.7"
 services:
-  web:
-    image: tc_book_store_api
-    build: .
-    ports:
-      - "3001:3001"
-    depends_on:
-      - mongo
-  mongo:
-    image: mongo
-    ports:
-      - "27017:27017"
+  # web:
+  #   image: tc_book_store_api
+  #   build: .
+  #   ports:
+  #     - "3001:3001"
+  #   depends_on:
+  #     - mongo
+  # mongo:
+  #   image: mongo
+  #   ports:
+  #     - "27017:27017"
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -20,6 +21,7 @@ services:
       - 22181:2181
   kafka:
     image: confluentinc/cp-kafka:latest
+    container_name: kafka
     depends_on:
       - zookeeper
     ports:
@@ -30,3 +32,63 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  schema-registry:
+    image: confluentinc/cp-schema-registry:latest
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - zookeeper
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: ERROR
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper:2181
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://schema-registry:8081
+      SCHEMA_REGISTRY_DEBUG: "true"
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - 9000:9000
+      - 9001:9001
+    volumes:
+      - ./storage:/data
+    environment:
+      MINIO_ROOT_USER: tabcorpuser
+      MINIO_ROOT_PASSWORD: tabcorp@2023
+    command: server --console-address ":9001" /data
+  jupyter:
+    container_name: glue_jupyter
+    environment:
+      DISABLE_SSL: 'true'
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_PUBLIC_ENDPOINT: http://minio:9000
+      SCHEMA_REGISTRY_ENDPOINT: http://schema-registry:8081
+      POSTGRES_HOST: http://postgres:5432
+      POSTGRES: postgres
+    image: amazon/aws-glue-libs:glue_libs_4.0.0_image_01
+    ports:
+      - '4040:4040'
+      - '18080:18080'
+      - '8998:8998'
+      - '8888:8888'
+    restart: always
+    volumes:
+      - ./.aws:/home/glue_user/.aws:ro
+      - ${LOCAL_JUPYTER_WORKSPACE}:/home/glue_user/workspace/jupyter_workspace:rw
+    command: /home/glue_user/jupyter/jupyter_start.sh
+  postgres:
+    image: postgres:14.1-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - 5432:5432
+    restart: always
+    volumes:
+      - /db-data:/var/lib/postgresql/data

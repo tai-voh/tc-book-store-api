@@ -39,6 +39,9 @@ app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: false }));
 app.use((0, cookie_parser_1.default)());
 app.use(express_1.default.static(path_1.default.join(__dirname, 'public')));
+// image resource
+const imagePath = path_1.default.join(__dirname, '../public/images');
+app.use('/images', express_1.default.static(imagePath));
 // API Routes
 const bookRouter = require('./routes/books');
 app.use('/api/books', bookRouter);
@@ -60,9 +63,6 @@ app.use(function (err, req, res, next) {
     res.status(err.status || 500);
     res.send('Internal Server Error');
 });
-// image resource
-const imagePath = path_1.default.join(__dirname, '..', 'public/images');
-app.use('/images', express_1.default.static(imagePath));
 // Gracefully disconnect from the database when the application is terminated
 process.on('SIGINT', () => __awaiter(void 0, void 0, void 0, function* () {
     yield (0, db_1.disconnectFromDatabase)();

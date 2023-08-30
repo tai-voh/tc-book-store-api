@@ -29,6 +29,8 @@ const books_1 = __importDefault(require("../models/books"));
 const pagination_1 = __importDefault(require("../models/pagination"));
 const error_1 = __importDefault(require("../models/error"));
 const kafka_1 = require("../config/kafka");
+const minio_1 = require("../config/minio");
+const schema_1 = require("../config/schema");
 /**
  * Execute requests via Kafka
  */
@@ -45,16 +47,22 @@ function executeRequest() {
                     const action = data === null || data === void 0 ? void 0 : data.action;
                     const id = data === null || data === void 0 ? void 0 : data.id;
                     const content = data === null || data === void 0 ? void 0 : data.content;
-                    console.log('receive message');
                     switch (action) {
                         case 'create':
-                            createViaKafka(content);
+                            if (yield createViaKafka(content)) {
+                                saveToMinio(data);
+                            }
                             break;
                         case 'update':
-                            updateViaKafka(id, content);
+                            if (yield updateViaKafka(id, content)) {
+                                saveToMinio(data);
+                            }
                             break;
                         case 'deleteByBookId':
-                            deleteByBookIdViaKafka(id);
+                            if (yield deleteByBookIdViaKafka(id)) {
+                                saveToMinio(data);
+                            }
+                            // deleteByBookIdViaKafka(id);
                             break;
                         default:
                             console.log('Error when execute book request');
@@ -68,6 +76,27 @@ function executeRequest() {
     });
 }
 executeRequest();
+/**
+ * Save requests to Minio
+ */
+function saveToMinio(data) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const registryId = yield (0, schema_1.registerSchema)();
+            if (registryId) {
+                const content = schema_1.registry.encode(registryId, data);
+                minio_1.minioClient.putObject(minio_1.bookBucketName, `book-request-${Date.now()}`, content, function (err, etag) {
+                    if (err)
+                        return console.log(err);
+                    console.log('Book message uploaded successfully.');
+                });
+            }
+        }
+        catch (error) {
+            console.log(error ? error['message'] : "Some error occurred while saving book request message to Minio.");
+        }
+    });
+}
 /**
  * Receive requests and store in Kafka
  */
@@ -344,28 +373,27 @@ exports.deleteByBookId = deleteByBookId;
  * @param {*} params
  */
 function createViaKafka(params) {
-    try {
-        const book = new books_1.default({
-            _id: new mongoose_1.default.Types.ObjectId(),
-            title: params.title,
-            quantity: params.quantity,
-            price: params.price,
-            description: params.description,
-            categoryId: params.categoryId,
-            image: params.filename,
-            userId: params.userId
-        });
-        // Save Book in the database
-        book
-            .save(book)
-            .then(data => {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const book = new books_1.default({
+                _id: new mongoose_1.default.Types.ObjectId(),
+                title: params.title,
+                quantity: params.quantity,
+                price: params.price,
+                description: params.description,
+                categoryId: params.categoryId,
+                image: params.image,
+                userId: params.userId
+            });
+            // Save Book in the database
+            book.save(book);
             return true;
-        });
-    }
-    catch (error) {
-        console.log(error ? error['message'] : "Some error occurred while creating the Book.");
-        return false;
-    }
+        }
+        catch (error) {
+            console.log(error ? error['message'] : "Some error occurred while creating the Book.");
+            return false;
+        }
+    });
 }
 ;
 /**
@@ -374,17 +402,16 @@ function createViaKafka(params) {
  * @param {*} params
  */
 function updateViaKafka(id, params) {
-    try {
-        books_1.default.findByIdAndUpdate(id, params, { useFindAndModify: false })
-            .then(data => {
-            if (data)
-                return true;
-        });
-    }
-    catch (error) {
-        console.log(error ? error['message'] : "Some error occurred while updating book.");
-        return false;
-    }
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            books_1.default.findByIdAndUpdate(id, params, { useFindAndModify: false });
+            return true;
+        }
+        catch (error) {
+            console.log(error ? error['message'] : "Some error occurred while updating book.");
+            return false;
+        }
+    });
 }
 ;
 /**
@@ -392,13 +419,15 @@ function updateViaKafka(id, params) {
  * @param {*} id
  */
 function deleteByBookIdViaKafka(id) {
-    books_1.default.findByIdAndRemove(id, { useFindAndModify: false })
-        .then(data => {
-        return true;
-    })
-        .catch(error => {
-        console.log(error ? error['message'] : "Could not delete Book with id " + id);
-        return false;
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            books_1.default.findByIdAndRemove(id, { useFindAndModify: false });
+            return true;
+        }
+        catch (error) {
+            console.log(error ? error['message'] : "Some error occurred while deleting book.");
+            return false;
+        }
     });
 }
 ;

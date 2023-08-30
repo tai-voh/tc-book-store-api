@@ -1,0 +1,81 @@
+{
+  "name": "order",
+  "type": "record",
+  "namespace" : "order",
+  "fields": [
+    {
+      "name": "id",
+      "type": "string"
+    },
+    {
+      "name": "userId",
+      "type": "string"
+    },
+    {
+      "name": "customerInfo",
+      "type": {
+        "name": "customerInfoFields",
+        "type": "record",
+        "fields": [
+          {
+            "name": "firstName",
+            "type": "string"
+          },
+          {
+            "name": "lastName",
+            "type": "string"
+          },
+          {
+            "name": "email",
+            "type": "string"
+          },
+          {
+            "name": "tel",
+            "type": "string"
+          },
+          {
+            "name": "address",
+            "type": "string"
+          }
+        ]
+      }
+      
+    },
+    {
+      "name": "createdDate",
+      "type": "string"
+    },
+    {
+      "name": "status",
+      "type": "string"
+    },
+    {
+      "name": "items",
+      "type": {
+        "type": "array",
+        "items": {
+          "name": "item",
+          "type": "record",
+          "fields": [
+            {
+              "name": "productId",
+              "type": "string"
+            },
+            {
+              "name": "quantity",
+              "type": "int"
+            },
+            {
+              "name": "price",
+              "type": "float"
+            },
+            {
+              "name": "title",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

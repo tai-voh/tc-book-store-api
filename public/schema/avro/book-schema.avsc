@@ -1,0 +1,43 @@
+{
+  "name": "book",
+  "type": "record",
+  "namespace" : "book.request",
+  "fields": [
+    {
+      "name": "action",
+      "type": "string"
+    },
+    {
+      "name": "id",
+      "type": "string"
+    },
+    {
+      "name": "title",
+      "type": "string"
+    },
+    {
+      "name": "image",
+      "type": "string"
+    },
+    {
+      "name": "quantity",
+      "type": "int"
+    },
+    {
+      "name": "price",
+      "type": "float"
+    },
+    {
+      "name": "description",
+      "type": "string"
+    },
+    {
+      "name": "categoryId",
+      "type": "string"
+    },
+    {
+      "name": "userId",
+      "type": "string"
+    }
+  ]
+}

@@ -3,10 +3,70 @@ import CartModel from "../models/carts";
 import UserModel from "../models/users";
 import BookModel from "../models/books";
 import OrderModel from "../models/orders";
+import CustomerModel from "../models/customers";
 import Pagination from "../models/pagination";
 import Error from "../models/error";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { producer, orderConsumer} from "../config/kafka";
+import { minioClient, orderBucketName, saveContent } from "../config/minio";
+import { registry } from "../config/schema";
+
+const topic = 'orders';
+/**
+ * Save requests to Kafka as message
+ */
+async function saveMessage(data) {
+  console.log('Save order')
+  await producer.connect();
+  await producer.send({
+      topic: topic,
+      messages: [
+          {
+              key: 'key',
+              value: JSON.stringify(data)
+          }
+      ]
+  });
+  await producer.disconnect();
+}
+
+/**
+ * Execute requests via Kafka
+ */
+async function executeRequest() {
+  try {
+    console.log('executeRequest')
+      await orderConsumer.connect();
+      await orderConsumer.subscribe({ topics: [topic] });
+      await orderConsumer.run({
+          eachMessage: async ({message}) => {
+            const data = JSON.parse(message.value?.toString()!);
+            if (data.items.length) {
+              saveToMinio(data)
+            } else {
+              console.log('Error when execute order request');
+            }
+          },
+      })
+  }
+  catch (error) {
+      console.log(error? error['message'] : "Execute request failed");
+  }
+}
+executeRequest();
+
+/**
+ * Save requests to Minio
+ */
+async function saveToMinio(data) {
+  try {
+    console.log('saveToMinio')
+      await saveContent('orders', data);
+  } catch (error) {
+      console.log(error? error['message'] : "Some error occurred while saving order message to Minio.")
+  }
+}
 
 /**
  * Retrieve all Orders from the database.
@@ -94,12 +154,15 @@ async function checkItems(items, res) {
 async function findOne(req, res) {
   const id = req.params.orderId;
 
-  OrderModel.findById(id)
+  OrderModel.findById(id).lean()
     .then(async (data) => {
       if (!data)
         res.status(404).send(new Error("Not found order with id " + id));
       else {
         data.items = await checkItems(data.items, res);
+        if (data.customerId) {
+          data.customer = await CustomerModel.findById(data.customerId.toString());
+        }
         res.send(data);
       }
     })
@@ -157,9 +220,9 @@ async function findByUser(req, res) {
  */
 async function create(req, res) {
   // Validate request
-  const { userId, cartId, customerInfo } = req.body;
-  if (!customerInfo || !customerInfo?.firstName || !customerInfo?.lastName || !customerInfo?.email || !customerInfo?.tel || !customerInfo?.address) {
-    res.status(400).send(new Error("No customer information for order"));
+  const { userId, cartId, customerId } = req.body;
+  if (!customerId) {
+    res.status(400).send(new Error("No customer for order"));
     return;
   }
 
@@ -225,13 +288,7 @@ async function create(req, res) {
     const order = new OrderModel({
       _id: new mongoose.Types.ObjectId(),
       userId: userId,
-      customerInfo: {
-        firstName: customerInfo.firstName,
-        lastName: customerInfo.lastName,
-        email: customerInfo.email,
-        tel: customerInfo.tel,
-        address: customerInfo.address
-      },
+      customerId: customerId,
       createdDate: Date.now(),
       status: 'received',
       items: orderItems
@@ -239,12 +296,13 @@ async function create(req, res) {
 
     order
       .save(order)
-      .then(async (data) => {
+      .then(async (orderData) => {
         for(let i of updateItems) {
           await BookModel.findByIdAndUpdate(i.productId, {quantity: i.quantity}, { useFindAndModify: false });
         }
-        await CartModel.findByIdAndRemove(cartId)
-        res.status(200).send(data);
+        await CartModel.findByIdAndRemove(cartId);
+        await saveMessage(orderData);
+        res.status(200).send(orderData);
       })
   } catch (error) {
     res
@@ -284,66 +342,17 @@ async function update(req, res) {
 
   try {
     OrderModel.findByIdAndUpdate(orderId, { customerInfo: customerInfo}, { useFindAndModify: false })
-    .then((data) => {
+    .then(async (data) => {
       if (!data) {
         res.status(404).send(new Error("Could not update Order with id " + orderId));
-      } else res.send({ message: "Order was updated successfully." });
+      } else {
+        res.send({ message: "Order was updated successfully." });
+        await saveMessage(data);
+      }
     })
     .catch((err) => {
       res.status(500).send(new Error("Error updating Order with id " + orderId));
     });
-  } catch (error) {
-    res
-      .status(500)
-      .json(
-        new Error(
-          error ? error["message"] : "Some error occurred while updating cart."
-        )
-      );
-  }
-}
-
-/**
- * Update item in cart
- * @param {*} cart
- * @param {*} item
- * @param {*} res
- */
-async function updateItemToCart(cart, item, update, res) {
-  let productDetails = await BookModel.findById(item.productId);
-  if (!productDetails) {
-    productDetails = {
-      price: 0,
-      quantity: 0,
-      title: ''
-    }
-  }
-
-  try {
-    //---- check if index exists ----
-    const indexFound = cart.items.findIndex(i => i.productId == item.productId);
-    //------this removes an item from the the cart if the quantity is set to zero
-    if (indexFound !== -1 && item.quantity <= 0) {
-        cart.items.splice(indexFound, 1);
-    }
-    //----------check if product exist,just add the previous quantity with the new quantity
-    else if (indexFound !== -1) {
-        cart.items[indexFound].quantity = item.quantity;
-        cart.items[indexFound].price = productDetails.price;
-        cart.items[indexFound].stockQuantity = productDetails.quantity;
-        cart.items[indexFound].title = productDetails.title;
-    }
-    //----Check if Quantity is Greater than 0 then add item to items Array ----
-    else if (item.quantity > 0) {
-        cart.items.push({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: productDetails.price,
-            stockQuantity: productDetails.quantity,
-            title: productDetails.title
-        })
-    }
-    return cart;
   } catch (error) {
     res
       .status(500)
@@ -373,6 +382,7 @@ function deleteByUserId(req, res) {
     })
     .catch((err) => {
       res.status(500).send(new Error("Could not delete Order with id " + id));
+      
     });
 }
 
